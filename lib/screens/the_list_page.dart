@@ -26,6 +26,7 @@ class _TheListPageState extends State<TheListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Color.fromRGBO(240, 238, 248, 1),
       appBar: AppBar(
         title: Text("The List of things to do"),
       ),
@@ -34,40 +35,63 @@ class _TheListPageState extends State<TheListPage> {
         child: Center(
           child: CircularProgressIndicator(),
         ),
-        replacement: items == ""
-            ? Center(child: Text("Click on the button below and add a task"))
-            : RefreshIndicator(
-                onRefresh: getTodoList,
-                child: ListView.builder(
-                  itemCount: items.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final item = items[index] as Map;
-                    return Column(
-                      children: [
-                        ListTile(
-                          title: Text(item["title"]),
-                          subtitle: Text(item["description"]),
-                          leading: CircleAvatar(child: Text("${index + 1}")),
-                          trailing: PopupMenuButton(
-                            itemBuilder: (context) {
-                              return [PopupMenuItem(child: Text("Edit"))];
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+        replacement: RefreshIndicator(
+          onRefresh: getTodoList,
+          child: Visibility(
+            visible: items.isNotEmpty,
+            replacement: Center(
+              child: Text(
+                "No task, click on Add todo",
+                style: TextStyle(fontSize: 20),
               ),
+            ),
+            child: ListView.builder(
+              padding: EdgeInsets.all(15),
+              itemCount: items.length,
+              itemBuilder: (BuildContext context, int index) {
+                final item = items[index] as Map;
+                final id = item["_id"] as String;
+                return Column(
+                  children: [
+                    Card(
+                      child: ListTile(
+                        title: Text(item["title"]),
+                        subtitle: Text(item["description"]),
+                        leading: CircleAvatar(child: Text("${index + 1}")),
+                        trailing: PopupMenuButton(
+                          onSelected: (value) {
+                            if (value == "edit") {
+                              navigateToEditPage(item);
+                            } else if (value == "delete") {
+                              //
+                              deleteById(id);
+                            }
+                          },
+                          itemBuilder: (context) {
+                            return [
+                              PopupMenuItem(
+                                child: Text("Edit"),
+                                value: "edit",
+                              ),
+                              PopupMenuItem(
+                                child: Text("Delete"),
+                                value: "delete",
+                              ),
+                            ];
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TheAddPage(),
-            ),
-          );
+          navigateToAddPage();
         },
         label: Text("Add to-do"),
       ),
@@ -102,6 +126,32 @@ class _TheListPageState extends State<TheListPage> {
     });
   }
 
+  void navigateToEditPage(Map item) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TheAddPage(todo: item),
+      ),
+    );
+    setState(() {
+      isLoading = true;
+    });
+    getTodoList();
+  }
+
+  void navigateToAddPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TheAddPage(),
+      ),
+    );
+    setState(() {
+      isLoading = true;
+    });
+    getTodoList();
+  }
+
   void showErrorMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -109,5 +159,29 @@ class _TheListPageState extends State<TheListPage> {
         backgroundColor: Colors.red,
       ),
     );
+  }
+
+  void showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> deleteById(id) async {
+    final url = "http://api.nstack.in/v1/todos/$id";
+    final res = await http.delete(Uri.parse(url));
+
+    if (res.statusCode == 200) {
+      showSuccessMessage("Succesfully deleted");
+      final filtered = items.where((element) => element["_id"] != id).toList();
+      setState(() {
+        items = filtered;
+      });
+    } else {
+      showErrorMessage("Unable to delete");
+    }
   }
 }
